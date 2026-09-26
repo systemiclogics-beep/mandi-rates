@@ -1,12 +1,11 @@
-PROPRIETARY LICENSE
+PRIVATE AND PROPRIETARY SOFTWARE LICENSE
+=========================================
 
-Copyright (c) 2026 BharatMandi / systemiclogics-beep.
-All Rights Reserved.
+Copyright (c) 2026 BharatMandi / systemiclogics-beep. All Rights Reserved.
 
-This source code and its associated documentation files are strictly proprietary 
-and confidential intellectual property of BharatMandi.
+NOTICE: THIS REPOSITORY CONTAINS PRIVATE AND PROPRIETARY INTELLECTUAL PROPERTY.
 
-UNAUTHORIZED COPYING, MODIFICATION, REPRODUCTION, REDISTRIBUTION, OR USE 
-OF THIS CODE, IN WHOLE OR IN PART, FOR COMMERCIAL OR NON-COMMERCIAL PURPOSES, 
-IS STRICTLY PROHIBITED WITHOUT PRIOR EXPLICIT WRITTEN PERMISSION FROM 
-THE COPYRIGHT OWNER.
+1. NO PERMISSION TO COPY: You may NOT copy, replicate, clone for reuse, reproduce, mirror, scrape, or distribute any code, algorithms, assets, or pipeline configurations from this repository.
+2. NO DERIVATIVE WORKS: You may NOT modify, adapt, reverse-engineer, or create derivative works or competing products based on this source code or architecture.
+3. PUBLIC VISIBILITY DISCLAIMER: The public visibility of this repository is maintained solely for CDN distribution and automated delivery pipelines. Visibility DOES NOT constitute open-source release or public domain dedication. No license, express or implied, is granted to any visitor or third party.
+4. DMCA & LEGAL ENFORCEMENT: Any unauthorized copying, distribution, or commercial/non-commercial use of this codebase is strictly prohibited and subject to immediate DMCA takedown and copyright infringement enforcement.
