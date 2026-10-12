@@ -9,6 +9,7 @@ Pulls daily mandi arrival and modal prices from:
 3. Local verified fallback seed (Fail-safe shield)
 """
 
+from __future__ import annotations
 import os
 import json
 import ssl
@@ -16,7 +17,7 @@ import time
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 RESOURCE_ID = "9ef84268-d588-465a-a308-a864a43d0070"
 API_ENDPOINT = f"https://api.data.gov.in/resource/{RESOURCE_ID}"
@@ -49,47 +50,56 @@ class MandiDataFetcher:
     def solve_agmarknet_captcha(cls, headers: Dict[str, str], ctx: ssl.SSLContext) -> Optional[Tuple[str, str]]:
         """
         Fetches and solves the Agmarknet single-line sans-serif CAPTCHA using OCR.
+        Tries fresh captchas until a high-confidence 6-character solution is produced.
         Returns (captcha_key, captcha_value) or None if solver fails.
         """
-        try:
-            gen_url = "https://api.agmarknet.gov.in/v1/captcha/generator"
-            req = urllib.request.Request(gen_url, data=b"{}", headers=headers, method="POST")
-            with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
-                cap_data = json.loads(r.read().decode("utf-8"))
-                key = cap_data.get("captcha_key")
-                img_b64 = cap_data.get("captcha_image")
+        import base64
+        import io
+        from PIL import Image
 
-            if not key or not img_b64:
-                return None
+        best_cand = None
 
-            import base64
-            import io
-            from PIL import Image
-
-            img = Image.open(io.BytesIO(base64.b64decode(img_b64))).convert("L")
-            # Upscale 2x for optimal OCR recognition on standard sans-serif characters
-            img = img.resize((img.width * 2, img.height * 2), Image.Resampling.LANCZOS)
-            bw = img.point(lambda p: 0 if p < 125 else 255)
-
+        for attempt in range(4):
             try:
-                import pytesseract
-                # Test with psm 8 (single word) and fallback psm 7 (single line)
-                for psm in [8, 7]:
-                    config = f'--oem 3 --psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-                    text = pytesseract.image_to_string(bw, config=config).strip()
-                    clean_text = "".join(text.split())
-                    if len(clean_text) == 6:
-                        return key, clean_text
-                # If 5-7 chars, accept as best match
-                if len(clean_text) >= 5 and len(clean_text) <= 7:
-                    return key, clean_text
-            except Exception as e:
-                print(f"[OCR ERROR] {e}")
+                gen_url = "https://api.agmarknet.gov.in/v1/captcha/generator"
+                req = urllib.request.Request(gen_url, data=b"{}", headers=headers, method="POST")
+                with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+                    cap_data = json.loads(r.read().decode("utf-8"))
+                    key = cap_data.get("captcha_key")
+                    img_b64 = cap_data.get("captcha_image")
 
-            return None
-        except Exception as e:
-            print(f"[CAPTCHA GEN ERROR] {e}")
-            return None
+                if not key or not img_b64:
+                    continue
+
+                img = Image.open(io.BytesIO(base64.b64decode(img_b64))).convert("L")
+                # Upscale 2.5x for optimal OCR recognition on standard sans-serif characters
+                img = img.resize((int(img.width * 2.5), int(img.height * 2.5)), Image.Resampling.LANCZOS)
+                # Binarize text (text is dark ~50, background is light ~200)
+                bw = img.point(lambda p: 0 if p < 130 else 255)
+
+                try:
+                    import pytesseract
+                    for psm in [8, 7, 6]:
+                        config = f'--oem 3 --psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+                        raw = pytesseract.image_to_string(bw, config=config).strip()
+                        clean = "".join(raw.split())
+                        if len(clean) == 6:
+                            print(f"[CAPTCHA] Solved cleanly: {clean} (key: {key[:8]}...)")
+                            return key, clean
+                        if 5 <= len(clean) <= 7 and not best_cand:
+                            best_cand = (key, clean)
+                except Exception as e:
+                    print(f"[OCR ERROR] {e}")
+
+            except Exception as e:
+                print(f"[CAPTCHA GEN ERROR] {e}")
+                time.sleep(0.5)
+
+        if best_cand:
+            print(f"[CAPTCHA] Fallback best candidate: {best_cand[1]} (key: {best_cand[0][:8]}...)")
+            return best_cand
+
+        return None
 
     @classmethod
     def fetch_from_agmarknet(cls, target_date_iso: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
@@ -147,6 +157,7 @@ class MandiDataFetcher:
                     try:
                         with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
                             data = json.loads(resp.read().decode("utf-8"))
+                            st_count = 0
                             for g in data.get("commodityGroups", []):
                                 for c in g.get("commodities", []):
                                     c_name = c.get("commodityName", "")
@@ -170,6 +181,8 @@ class MandiDataFetcher:
                                                 "trend": "stable",
                                                 "change_amount": 0
                                             })
+                                            st_count += 1
+                            print(f"[INFO] State {s_name} ({s_id}): {st_count} records ingested.")
                             break  # Success, exit retry loop
                     except urllib.error.HTTPError as e:
                         if e.code == 429:
@@ -177,11 +190,13 @@ class MandiDataFetcher:
                             print(f"[WARN] 429 Rate limited on state {s_name} ({s_id}). Backing off for {backoff}s...")
                             time.sleep(backoff)
                         elif e.code == 400:
-                            # Captcha required or retry needed
+                            print(f"[WARN] Captcha required/mismatch on state {s_name} ({s_id}). Retrying attempt {attempt+1}...")
                             time.sleep(1.0)
                         else:
+                            print(f"[WARN] HTTP {e.code} on state {s_name} ({s_id}): {e}")
                             break
-                    except Exception:
+                    except Exception as e:
+                        print(f"[WARN] Network error on state {s_name} ({s_id}): {e}")
                         break
 
             if len(records) >= 50:

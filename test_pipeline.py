@@ -215,5 +215,15 @@ class TestPayloadIntegrityGate(unittest.TestCase):
         self.assertTrue(valid)
 
 
+class TestPipelineImports(unittest.TestCase):
+
+    def test_pipeline_modules_import(self):
+        """Ensures all pipeline modules can be imported without syntax or type errors."""
+        import fetcher
+        self.assertTrue(hasattr(fetcher, "MandiDataFetcher"))
+        import sync
+        self.assertTrue(hasattr(sync, "run_pipeline"))
+
+
 if __name__ == "__main__":
     unittest.main()
