@@ -34,6 +34,12 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install OCR Engine & Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr
+          pip install --quiet pytesseract pillow requests
+
       - name: Run Zero-Error Pipeline & Anomaly Tests
         run: |
           python -m unittest test_pipeline.py

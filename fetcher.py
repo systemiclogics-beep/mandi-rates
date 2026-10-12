@@ -46,11 +46,51 @@ class MandiDataFetcher:
     """Multi-source data fetcher for all Indian APMC mandis."""
 
     @classmethod
+    def solve_agmarknet_captcha(cls, headers: Dict[str, str], ctx: ssl.SSLContext) -> Optional[Tuple[str, str]]:
+        """
+        Fetches and solves the Agmarknet single-line sans-serif CAPTCHA using OCR.
+        Returns (captcha_key, captcha_value) or None if solver fails.
+        """
+        try:
+            gen_url = "https://api.agmarknet.gov.in/v1/captcha/generator"
+            req = urllib.request.Request(gen_url, data=b"{}", headers=headers, method="POST")
+            with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+                cap_data = json.loads(r.read().decode("utf-8"))
+                key = cap_data.get("captcha_key")
+                img_b64 = cap_data.get("captcha_image")
+
+            if not key or not img_b64:
+                return None
+
+            import base64
+            import io
+            from PIL import Image
+
+            img = Image.open(io.BytesIO(base64.b64decode(img_b64))).convert("L")
+            # Enhance: binarize clean sans-serif text against light gray background
+            bw = img.point(lambda p: 0 if p < 125 else 255)
+
+            try:
+                import pytesseract
+                # Agmarknet captcha is strictly 6 alphanumeric characters without spaces
+                custom_config = r'--oem 3 --psm 8 -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+                text = pytesseract.image_to_string(bw, config=custom_config).strip()
+                # Clean up any whitespace
+                text = "".join(text.split())
+                if len(text) >= 5 and len(text) <= 7:
+                    return key, text
+            except Exception as e:
+                pass
+
+            return None
+        except Exception:
+            return None
+
+    @classmethod
     def fetch_from_agmarknet(cls, target_date_iso: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
         """
         Fetches live pan-India mandi records directly from the Agmarknet 2.0 API.
-        No API key required.
-        Includes gentle pacing and exponential backoff retry to avoid Cloud Armor 429 rate limiting.
+        Includes gentle pacing, exponential backoff, and automatic OCR captcha resolution.
         """
         ctx = ssl.create_default_context()
 
@@ -59,7 +99,8 @@ class MandiDataFetcher:
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
             "Origin": "https://agmarknet.gov.in",
-            "Referer": "https://agmarknet.gov.in/"
+            "Referer": "https://agmarknet.gov.in/",
+            "Content-Type": "application/json"
         }
 
         dates_to_try = []
@@ -77,14 +118,26 @@ class MandiDataFetcher:
 
             for s_id in PRIORITY_STATES:
                 s_name = STATE_MAP.get(s_id, f"State_{s_id}")
-                url = f"{AGMARKNET_BASE}?date={d_iso}&state={s_id}&includeExcel=false"
 
                 # Pacing delay between states (1.0s) to be polite to government server
                 time.sleep(1.0)
 
-                # Retry loop with exponential backoff on 429
+                # Retry loop with exponential backoff on 429 and automatic captcha handling
                 max_retries = 3
                 for attempt in range(max_retries):
+                    # Request fresh captcha solution for the state query
+                    cap_pair = cls.solve_agmarknet_captcha(headers, ctx)
+
+                    params = {
+                        "date": d_iso,
+                        "state": str(s_id),
+                        "includeExcel": "false"
+                    }
+                    if cap_pair:
+                        params["captcha_key"] = cap_pair[0]
+                        params["captcha"] = cap_pair[1]
+
+                    url = f"{AGMARKNET_BASE}?{urllib.parse.urlencode(params)}"
                     req = urllib.request.Request(url, headers=headers)
                     try:
                         with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
@@ -118,6 +171,9 @@ class MandiDataFetcher:
                             backoff = (attempt + 1) * 3
                             print(f"[WARN] 429 Rate limited on state {s_name} ({s_id}). Backing off for {backoff}s...")
                             time.sleep(backoff)
+                        elif e.code == 400:
+                            # Captcha required or retry needed
+                            time.sleep(1.0)
                         else:
                             break
                     except Exception:
