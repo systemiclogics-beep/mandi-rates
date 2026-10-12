@@ -67,23 +67,28 @@ class MandiDataFetcher:
             from PIL import Image
 
             img = Image.open(io.BytesIO(base64.b64decode(img_b64))).convert("L")
-            # Enhance: binarize clean sans-serif text against light gray background
+            # Upscale 2x for optimal OCR recognition on standard sans-serif characters
+            img = img.resize((img.width * 2, img.height * 2), Image.Resampling.LANCZOS)
             bw = img.point(lambda p: 0 if p < 125 else 255)
 
             try:
                 import pytesseract
-                # Agmarknet captcha is strictly 6 alphanumeric characters without spaces
-                custom_config = r'--oem 3 --psm 8 -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-                text = pytesseract.image_to_string(bw, config=custom_config).strip()
-                # Clean up any whitespace
-                text = "".join(text.split())
-                if len(text) >= 5 and len(text) <= 7:
-                    return key, text
+                # Test with psm 8 (single word) and fallback psm 7 (single line)
+                for psm in [8, 7]:
+                    config = f'--oem 3 --psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+                    text = pytesseract.image_to_string(bw, config=config).strip()
+                    clean_text = "".join(text.split())
+                    if len(clean_text) == 6:
+                        return key, clean_text
+                # If 5-7 chars, accept as best match
+                if len(clean_text) >= 5 and len(clean_text) <= 7:
+                    return key, clean_text
             except Exception as e:
-                pass
+                print(f"[OCR ERROR] {e}")
 
             return None
-        except Exception:
+        except Exception as e:
+            print(f"[CAPTCHA GEN ERROR] {e}")
             return None
 
     @classmethod
