@@ -22,10 +22,12 @@ def run_pipeline():
     print("   BHARATMANDI NATIONAL DATA PIPELINE & SHIELD   ")
     print("==================================================")
 
-    # 1. Snapshot previous day rates from existing today.json
+    # 1. Snapshot previous rates & records from existing today.json for rolling upsert
     out_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "today.json")
     existing_prices = {}
     existing_dates = {}
+    merged_records_map = {}
+    now_dt = datetime.now()
     if os.path.exists(out_file):
         try:
             with open(out_file, "r", encoding="utf-8") as f:
@@ -42,6 +44,15 @@ def run_pipeline():
                         existing_prices[r_id] = m
                         if r.get("arrival_date"):
                             existing_dates[r_id] = r["arrival_date"]
+                        # Retain recent active records (<= 14 days old) for rolling national coverage
+                        arr_str = r.get("arrival_date", "")
+                        try:
+                            arr_dt = datetime.strptime(arr_str, "%d-%m-%Y")
+                            if (now_dt - arr_dt).days <= 14:
+                                merged_records_map[r_id] = r
+                        except Exception:
+                            pass
+            print(f"[INFO] Loaded {len(merged_records_map)} existing active records for rolling merge.")
         except Exception as e:
             print(f"[WARN] Could not load previous today.json: {e}")
 
@@ -148,29 +159,35 @@ def run_pipeline():
     print(f"[SHIELD STATS] Unit-Bug Auto-Corrected: {unit_corrected_count} records.")
     print(f"[SHIELD STATS] Anomalies Quarantined/Rejected: {rejected_count} records.")
 
-    # Step 3: Pre-Commit Payload Integrity Gate
+    # Step 3: Pre-Commit Payload Integrity Gate on newly fetched batch
     is_valid, reason = PayloadIntegrityGate.verify_payload(cleaned_records, min_expected=30)
     if not is_valid:
         print(f"[PRE-COMMIT GATE FAILED] {reason}")
         print("[ABORT] Refusing to overwrite today.json with questionable data.")
         sys.exit(1)
 
-    # Step 4: Write clean, verified today.json
+    # Step 4: Rolling Upsert — overwrite updated mandis while retaining yesterday's closing rates for pending mandis
+    for rec in cleaned_records:
+        merged_records_map[rec["id"]] = rec
+
+    final_records = list(merged_records_map.values())
+
+    # Step 5: Write clean, verified today.json
     out_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "today.json")
 
     payload = {
-        "records": cleaned_records,
+        "records": final_records,
         "generated_at": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-        "total": len(cleaned_records),
-        "states_covered": len(set(r["state"] for r in cleaned_records)),
-        "mandis_covered": len(set(r["market"] for r in cleaned_records)),
-        "commodities_covered": len(set(r["commodity"] for r in cleaned_records))
+        "total": len(final_records),
+        "states_covered": len(set(r["state"] for r in final_records)),
+        "mandis_covered": len(set(r["market"] for r in final_records)),
+        "commodities_covered": len(set(r["commodity"] for r in final_records))
     }
 
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    print(f"[SUCCESS] Published {out_file}:")
+    print(f"[SUCCESS] Published {out_file} ({len(cleaned_records)} fresh + {len(final_records) - len(cleaned_records)} rolling):")
     print(f"  • Total Records: {payload['total']}")
     print(f"  • States: {payload['states_covered']}")
     print(f"  • Mandis: {payload['mandis_covered']}")

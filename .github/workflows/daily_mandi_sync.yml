@@ -48,6 +48,10 @@ jobs:
         env:
           DATAGOV_API_KEY: ${{ secrets.DATAGOV_API_KEY }}
         run: |
+          git clone --branch data --single-branch "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data-repo
+          if [ -f data-repo/today.json ]; then
+            cp data-repo/today.json today.json
+          fi
           python sync.py
 
       - name: Verify Data Health & Freshness Gate
@@ -91,6 +95,7 @@ jobs:
         run: |
           git config --global user.name "${{ github.actor }}"
           git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          rm -rf data-repo
           git clone --branch data --single-branch "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data-repo
           cp today.json data-repo/today.json
           cd data-repo
