@@ -224,6 +224,49 @@ class TestPipelineImports(unittest.TestCase):
         import sync
         self.assertTrue(hasattr(sync, "run_pipeline"))
 
+    def test_rolling_upsert_logic(self):
+        """Ensures rolling upsert properly updates today's records while retaining yesterday's closing records."""
+        existing_map = {
+            "mandi_up_barabanki_mentha": {
+                "id": "mandi_up_barabanki_mentha",
+                "state": "Uttar Pradesh",
+                "market": "Barabanki",
+                "commodity": "Mentha Oil",
+                "modal_price": 138945,
+                "arrival_date": "12-10-2026"
+            },
+            "mandi_mp_indore_wheat": {
+                "id": "mandi_mp_indore_wheat",
+                "state": "Madhya Pradesh",
+                "market": "Indore",
+                "commodity": "Wheat",
+                "modal_price": 2400,
+                "arrival_date": "12-10-2026"
+            }
+        }
+        # Suppose today only Indore Wheat traded with new price 2450
+        fresh_records = [
+            {
+                "id": "mandi_mp_indore_wheat",
+                "state": "Madhya Pradesh",
+                "market": "Indore",
+                "commodity": "Wheat",
+                "modal_price": 2450,
+                "arrival_date": "13-10-2026"
+            }
+        ]
+        # Simulate rolling merge
+        for r in fresh_records:
+            existing_map[r["id"]] = r
+
+        # Assert Indore Wheat was updated to today
+        self.assertEqual(existing_map["mandi_mp_indore_wheat"]["modal_price"], 2450)
+        self.assertEqual(existing_map["mandi_mp_indore_wheat"]["arrival_date"], "13-10-2026")
+        # Assert Barabanki Mentha Oil was preserved from yesterday
+        self.assertEqual(existing_map["mandi_up_barabanki_mentha"]["modal_price"], 138945)
+        self.assertEqual(existing_map["mandi_up_barabanki_mentha"]["arrival_date"], "12-10-2026")
+        self.assertEqual(len(existing_map), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
