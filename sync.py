@@ -185,7 +185,7 @@ def run_pipeline():
     }
 
     with open(out_file, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, separators=(',', ':'))
 
     print(f"[SUCCESS] Published {out_file} ({len(cleaned_records)} fresh + {len(final_records) - len(cleaned_records)} rolling):")
     print(f"  • Total Records: {payload['total']}")
