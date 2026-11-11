@@ -10,6 +10,8 @@ Data Cleaning, and Payload Integrity) function with zero errors.
 import unittest
 from validator import AnomalyDetector, PayloadIntegrityGate
 from cleaner import DataCleaner
+from weather_fetcher import WeatherFetcher, APMC_COORDINATES
+from payload_optimizer import PayloadOptimizer
 
 
 class TestAnomalyDetector(unittest.TestCase):
@@ -266,6 +268,87 @@ class TestPipelineImports(unittest.TestCase):
         self.assertEqual(existing_map["mandi_up_barabanki_mentha"]["modal_price"], 138945)
         self.assertEqual(existing_map["mandi_up_barabanki_mentha"]["arrival_date"], "12-10-2026")
         self.assertEqual(len(existing_map), 2)
+
+
+
+
+class TestWeatherFetcher(unittest.TestCase):
+
+    def test_weather_advisory_rules(self):
+        """Tests that weather advisories and risk levels trigger correctly."""
+        # 1. Warning: High rain probability (>= 75%)
+        w1 = WeatherFetcher.get_advisory(rain_prob=80, code=0, temp=28, wind=5)
+        self.assertEqual(w1["status"], "warning")
+        self.assertIn("tarpaulin", w1["advisory_en"].lower())
+
+        # 2. Warning: Thunderstorm WMO code (95)
+        w2 = WeatherFetcher.get_advisory(rain_prob=20, code=95, temp=25, wind=15)
+        self.assertEqual(w2["status"], "warning")
+
+        # 3. Caution: Moderate rain probability (>= 50%)
+        w3 = WeatherFetcher.get_advisory(rain_prob=55, code=0, temp=26, wind=8)
+        self.assertEqual(w3["status"], "caution")
+
+        # 4. Caution: Rain drizzle WMO code (61)
+        w4 = WeatherFetcher.get_advisory(rain_prob=30, code=61, temp=24, wind=4)
+        self.assertEqual(w4["status"], "caution")
+
+        # 5. Caution: Heat wave (>= 40°C)
+        w5 = WeatherFetcher.get_advisory(rain_prob=0, code=0, temp=42, wind=10)
+        self.assertEqual(w5["status"], "caution")
+
+        # 6. Safe: Clear, mild weather
+        w6 = WeatherFetcher.get_advisory(rain_prob=10, code=0, temp=27, wind=5)
+        self.assertEqual(w6["status"], "safe")
+        self.assertIn("अनुकूल", w6["advisory_hi"])
+
+    def test_weather_coordinates_validity(self):
+        """Tests that APMC coordinate database has valid geo bounds across India."""
+        self.assertGreater(len(APMC_COORDINATES), 100)
+        for key, data in APMC_COORDINATES.items():
+            lat = data.get("lat")
+            lon = data.get("lon")
+            self.assertIsNotNone(lat)
+            self.assertIsNotNone(lon)
+            # India latitude bounds ~ 8°N to 37°N, longitude ~ 68°E to 98°E
+            self.assertTrue(8.0 <= lat <= 38.0, f"Invalid latitude {lat} for {key}")
+            self.assertTrue(68.0 <= lon <= 98.0, f"Invalid longitude {lon} for {key}")
+
+
+class TestPayloadOptimizer(unittest.TestCase):
+
+    def test_commodity_aware_retention_and_edge_cases(self):
+        """Tests that perishables have shorter retention than grains, hill states are protected, and ghost varieties are pruned."""
+        from datetime import datetime
+        now = datetime(2026, 11, 10)
+
+        mock_records = [
+            # 1. Fresh Wheat (0 days old) -> kept
+            {'id': 'r1', 'state': 'Madhya Pradesh', 'market': 'Indore', 'commodity': 'Wheat', 'variety': 'Lokwan', 'arrival_date': '10-11-2026'},
+            # 2. 4-day old Wheat (Friday auction) -> kept (grains protected)
+            {'id': 'r2', 'state': 'Madhya Pradesh', 'market': 'Ujjain', 'commodity': 'Wheat', 'variety': 'Deshi', 'arrival_date': '06-11-2026'},
+            # 3. 4-day old Tomato (Perishable) -> pruned (stale perishable)
+            {'id': 'r3', 'state': 'Maharashtra', 'market': 'Nashik', 'commodity': 'Tomato', 'variety': 'Hybrid', 'arrival_date': '06-11-2026'},
+            # 4. 2-day old Tomato -> kept
+            {'id': 'r4', 'state': 'Maharashtra', 'market': 'Pune', 'commodity': 'Tomato', 'variety': 'Local', 'arrival_date': '08-11-2026'},
+            # 5. 6-day old Manipur Rice (Sparse hill state) -> kept
+            {'id': 'r5', 'state': 'Manipur', 'market': 'Imphal', 'commodity': 'Rice', 'variety': 'Local', 'arrival_date': '04-11-2026'},
+            # 6. Fresh Jaipur Bajra today + 4-day old duplicate variety in same mandi -> duplicate pruned
+            {'id': 'r6', 'state': 'Rajasthan', 'market': 'Jaipur', 'commodity': 'Bajra', 'variety': 'Deshi', 'arrival_date': '10-11-2026'},
+            {'id': 'r7', 'state': 'Rajasthan', 'market': 'Jaipur', 'commodity': 'Bajra', 'variety': 'Other', 'arrival_date': '06-11-2026'},
+        ]
+
+        # Multiplied to pass minimum record size threshold
+        res = PayloadOptimizer.optimize_for_mobile(mock_records * 100, target_mb=4.95, now_dt=now)
+        res_ids = set(r['id'] for r in res)
+
+        self.assertIn('r1', res_ids, 'Fresh wheat must be retained')
+        self.assertIn('r2', res_ids, 'Friday grain auction wheat must be retained')
+        self.assertNotIn('r3', res_ids, '4-day old perishable tomato must be pruned')
+        self.assertIn('r4', res_ids, '2-day tomato must be retained')
+        self.assertIn('r5', res_ids, '6-day hill state record must be retained')
+        self.assertIn('r6', res_ids, 'Fresh Jaipur Bajra must be retained')
+        self.assertNotIn('r7', res_ids, 'Old duplicate variety of Jaipur Bajra must be pruned')
 
 
 if __name__ == "__main__":

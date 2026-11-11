@@ -52,6 +52,9 @@ jobs:
           if [ -f data-repo/today.json ]; then
             cp data-repo/today.json today.json
           fi
+          if [ -f data-repo/weather.json ]; then
+            cp data-repo/weather.json weather.json
+          fi
           python sync.py
 
       - name: Verify Data Health & Freshness Gate
@@ -98,8 +101,11 @@ jobs:
           rm -rf data-repo
           git clone --branch data --single-branch "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data-repo
           cp today.json data-repo/today.json
+          if [ -f weather.json ]; then
+            cp weather.json data-repo/weather.json
+          fi
           cd data-repo
-          git add today.json
+          git add today.json weather.json
           if ! git diff --staged --quiet; then
             git commit -m "Auto-update daily mandi rates [$(date +'%Y-%m-%d %H:%M')]"
             for i in 1 2 3; do
@@ -129,13 +135,17 @@ jobs:
           BACKUP_PAT: ${{ secrets.BACKUP_PAT }}
         run: |
           for i in 1 2 3; do
-            echo "Purging jsDelivr cache for systemiclogics-beep@data/today.json (attempt $i)..."
-            curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@data/today.json" && break || sleep 3
+            echo "Purging jsDelivr cache for ${{ github.repository }}@data (attempt $i)..."
+            curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@data/today.json"
+            curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@data/weather.json"
+            break || sleep 3
           done
           if [ -n "$BACKUP_PAT" ]; then
             for i in 1 2 3; do
-              echo "Purging jsDelivr cache for Catalyst097@data/today.json (attempt $i)..."
-              curl -s "https://purge.jsdelivr.net/gh/Catalyst097/mandi-rates@data/today.json" && break || sleep 3
+              echo "Purging jsDelivr cache for Catalyst097@data (attempt $i)..."
+              curl -s "https://purge.jsdelivr.net/gh/Catalyst097/mandi-rates@data/today.json"
+              curl -s "https://purge.jsdelivr.net/gh/Catalyst097/mandi-rates@data/weather.json"
+              break || sleep 3
             done
           fi
 

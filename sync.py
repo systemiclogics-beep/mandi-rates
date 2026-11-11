@@ -15,6 +15,8 @@ from datetime import datetime
 from fetcher import MandiDataFetcher
 from cleaner import DataCleaner
 from validator import AnomalyDetector, PayloadIntegrityGate
+from weather_fetcher import WeatherFetcher
+from payload_optimizer import PayloadOptimizer
 
 
 def run_pipeline():
@@ -170,7 +172,12 @@ def run_pipeline():
     for rec in cleaned_records:
         merged_records_map[rec["id"]] = rec
 
-    final_records = list(merged_records_map.values())
+    raw_final_records = list(merged_records_map.values())
+
+    # Step 4b: Mobile Payload Optimizer — keep payload strictly under 5 MB with zero data quality loss
+    print("[INFO] Running Mobile Payload Optimizer (Target <= 4.95 MB)...")
+    final_records = PayloadOptimizer.optimize_for_mobile(raw_final_records, target_mb=4.95)
+    print(f"[OPTIMIZER] Optimized {len(raw_final_records)} down to {len(final_records)} records ({len(final_records)} strictly under 5 MB).")
 
     # Step 5: Write clean, verified today.json
     out_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "today.json")
@@ -192,6 +199,13 @@ def run_pipeline():
     print(f"  • States: {payload['states_covered']}")
     print(f"  • Mandis: {payload['mandis_covered']}")
     print(f"  • Commodities: {payload['commodities_covered']}")
+    # Step 6: Krishi Mausam (Weather & Rain Advisory) Fetch
+    try:
+        print("[INFO] Syncing Krishi Mausam (Weather and Rain Advisory)...\n")
+        WeatherFetcher.fetch_and_save_weather()
+    except Exception as e:
+        print(f"[WARN] Weather fetch encountered an issue: {e}")
+
     print("==================================================")
 
 
