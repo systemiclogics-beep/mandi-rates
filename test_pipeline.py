@@ -351,5 +351,29 @@ class TestPayloadOptimizer(unittest.TestCase):
         self.assertNotIn('r7', res_ids, 'Old duplicate variety of Jaipur Bajra must be pruned')
 
 
+class TestNoticesSchema(unittest.TestCase):
+    def test_notices_json_validity(self):
+        """Validates that notices.json exists and strictly adheres to expected schema."""
+        import json
+        from pathlib import Path
+
+        notices_path = Path(__file__).parent / "notices.json"
+        self.assertTrue(notices_path.exists(), "notices.json must exist in repo root")
+
+        with open(notices_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        self.assertIsInstance(data, dict, "notices.json must be a JSON dictionary")
+        self.assertIn("ALL", data, "notices.json should have a national ALL key")
+
+        for key, val in data.items():
+            items = val if isinstance(val, list) else [val]
+            for notice in items:
+                self.assertIn("active", notice, f"Notice under {key} missing 'active'")
+                self.assertIsInstance(notice["active"], bool, f"Notice 'active' must be a boolean in {key}")
+                self.assertIn("title", notice, f"Notice under {key} missing 'title'")
+                self.assertIn("message", notice, f"Notice under {key} missing 'message'")
+
+
 if __name__ == "__main__":
     unittest.main()

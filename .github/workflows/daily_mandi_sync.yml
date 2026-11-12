@@ -104,8 +104,14 @@ jobs:
           if [ -f weather.json ]; then
             cp weather.json data-repo/weather.json
           fi
+          if [ -f notices.json ]; then
+            cp notices.json data-repo/notices.json
+          fi
+          if [ -f sponsors.json ]; then
+            cp sponsors.json data-repo/sponsors.json
+          fi
           cd data-repo
-          git add today.json weather.json
+          git add today.json weather.json notices.json sponsors.json
           if ! git diff --staged --quiet; then
             git commit -m "Auto-update daily mandi rates [$(date +'%Y-%m-%d %H:%M')]"
             for i in 1 2 3; do
@@ -138,6 +144,7 @@ jobs:
             echo "Purging jsDelivr cache for ${{ github.repository }}@data (attempt $i)..."
             curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@data/today.json"
             curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@data/weather.json"
+            curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@data/notices.json"
             break || sleep 3
           done
           if [ -n "$BACKUP_PAT" ]; then
@@ -145,6 +152,7 @@ jobs:
               echo "Purging jsDelivr cache for Catalyst097@data (attempt $i)..."
               curl -s "https://purge.jsdelivr.net/gh/Catalyst097/mandi-rates@data/today.json"
               curl -s "https://purge.jsdelivr.net/gh/Catalyst097/mandi-rates@data/weather.json"
+              curl -s "https://purge.jsdelivr.net/gh/Catalyst097/mandi-rates@data/notices.json"
               break || sleep 3
             done
           fi
