@@ -2578,10 +2578,13 @@ class WeatherFetcher:
                     for entry in batch[idx]['entries']:
                         m = entry.get('market', '').strip().lower()
                         d = entry.get('district', '').strip().lower()
+                        s = entry.get('state', '').strip().lower()
                         if m:
                             weather_by_key[m] = weather_obj
                         if d:
                             weather_by_key[d] = weather_obj
+                        if s and s not in weather_by_key:
+                            weather_by_key[s] = weather_obj
 
                 successful_batches += 1
 
