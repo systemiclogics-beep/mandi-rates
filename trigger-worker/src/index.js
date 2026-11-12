@@ -142,16 +142,23 @@ export default {
         } catch (_) {}
       }
 
+      const escapeHtml = (str) => String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
       const sortEntries = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1]);
 
-      const formatTable = (entries, col1, col2) => {
+      const formatTable = (entries) => {
         if (!entries || entries.length === 0) {
           return '<tr><td colspan="2" class="empty">No activity recorded yet today</td></tr>';
         }
         return entries.map(([name, count]) => `
           <tr>
-            <td><strong>${name}</strong></td>
-            <td class="count">${count.toLocaleString()}</td>
+            <td><strong>${escapeHtml(name)}</strong></td>
+            <td class="count">${Number(count).toLocaleString()}</td>
           </tr>
         `).join('');
       };
@@ -183,7 +190,7 @@ export default {
   <div class="container">
     <div class="header">
       <h1>🌾 BharatMandi — Live Farmer Analytics</h1>
-      <p>Today's Real-Time Active Audience Breakdown (${today}) • 100% Anonymous & Legal</p>
+      <p>Today's Real-Time Active Audience Breakdown (${escapeHtml(today)}) • Total Sessions: ${Number(totalFarmers).toLocaleString()} • 100% Anonymous & Legal</p>
     </div>
 
     <div class="card">
