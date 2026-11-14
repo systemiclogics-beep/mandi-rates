@@ -83,13 +83,15 @@ export default {
             await env.STATS_KV.put(key, nextVal, { expirationTtl: ttl });
           };
 
-          ctx.waitUntil(Promise.all([
+          await Promise.all([
             increment(stateKey),
             increment(districtKey),
             increment(cropKey),
             increment(totalKey),
-          ]));
-        } catch (_) {}
+          ]);
+        } catch (err) {
+          console.error('[KV Error]:', err);
+        }
       }
 
       return new Response(JSON.stringify({ status: 'ok' }), {

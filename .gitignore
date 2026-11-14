@@ -39,3 +39,5 @@ desktop.ini
 *.tmp
 temp/
 scratch/
+.wrangler/
+trigger-worker/.wrangler/
