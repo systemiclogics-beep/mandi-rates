@@ -144,14 +144,61 @@ export default {
         } catch (_) {}
       }
 
+      const sortEntries = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1]);
+      const sortedStates = sortEntries(statesMap);
+      const sortedDistricts = sortEntries(districtsMap);
+      const sortedCrops = sortEntries(cropsMap);
+
+      // Support direct API / download formats: ?format=json or ?format=csv
+      const format = url.searchParams.get('format');
+      if (format === 'json') {
+        const payload = {
+          date: today,
+          totalSessions: totalFarmers,
+          states: Object.fromEntries(sortedStates),
+          districts: Object.fromEntries(sortedDistricts),
+          crops: Object.fromEntries(sortedCrops),
+        };
+        return new Response(JSON.stringify(payload, null, 2), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Disposition': `attachment; filename="BharatMandi_Analytics_${today}.json"`,
+          },
+        });
+      }
+
+      if (format === 'csv') {
+        let csv = '=== BharatMandi Farmer Analytics ===\n';
+        csv += `Date,${today}\n`;
+        csv += `Total Sessions,${totalFarmers}\n\n`;
+        csv += '--- TOP STATES ---\nState,Active Farmers\n';
+        sortedStates.forEach(([name, count]) => {
+          csv += `"${String(name).replace(/"/g, '""')}",${count}\n`;
+        });
+        csv += '\n--- TOP DISTRICTS ---\nDistrict,Active Farmers\n';
+        sortedDistricts.forEach(([name, count]) => {
+          csv += `"${String(name).replace(/"/g, '""')}",${count}\n`;
+        });
+        csv += '\n--- TOP CROPS IN DEMAND ---\nCrop,Searches & Views\n';
+        sortedCrops.forEach(([name, count]) => {
+          csv += `"${String(name).replace(/"/g, '""')}",${count}\n`;
+        });
+        return new Response(csv, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="BharatMandi_Analytics_${today}.csv"`,
+          },
+        });
+      }
+
       const escapeHtml = (str) => String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
-
-      const sortEntries = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1]);
 
       const formatTable = (entries) => {
         if (!entries || entries.length === 0) {
@@ -174,9 +221,13 @@ export default {
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #F4F6F8; color: #1E293B; margin: 0; padding: 20px; }
     .container { max-width: 800px; margin: 0 auto; }
-    .header { background: #1B5E20; color: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.08); margin-bottom: 20px; }
-    .header h1 { margin: 0; font-size: 22px; }
-    .header p { margin: 6px 0 0 0; opacity: 0.85; font-size: 13px; }
+    .header { background: #1B5E20; color: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.08); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; }
+    .header-text h1 { margin: 0; font-size: 22px; }
+    .header-text p { margin: 6px 0 0 0; opacity: 0.85; font-size: 13px; }
+    .btn-group { display: flex; gap: 8px; }
+    .btn-download { background: #FFFFFF; color: #1B5E20; font-weight: 700; border: none; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.12); transition: all 0.2s ease; text-decoration: none; }
+    .btn-download:hover { background: #E8F5E9; transform: translateY(-1px); }
+    .btn-download:active { transform: translateY(0); }
     .card { background: white; border-radius: 12px; padding: 18px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #E2E8F0; }
     .card h2 { margin: 0 0 12px 0; font-size: 16px; color: #0F172A; display: flex; align-items: center; justify-content: space-between; }
     .badge { background: #E8F5E9; color: #2E7D32; font-size: 12px; font-weight: 700; padding: 4px 8px; border-radius: 6px; }
@@ -191,15 +242,21 @@ export default {
 <body>
   <div class="container">
     <div class="header">
-      <h1>🌾 BharatMandi — Live Farmer Analytics</h1>
-      <p>Today's Real-Time Active Audience Breakdown (${escapeHtml(today)}) • Total Sessions: ${Number(totalFarmers).toLocaleString()} • 100% Anonymous & Legal</p>
+      <div class="header-text">
+        <h1>🌾 BharatMandi — Live Farmer Analytics</h1>
+        <p>Today's Real-Time Active Audience Breakdown (${escapeHtml(today)}) • Total Sessions: ${Number(totalFarmers).toLocaleString()} • 100% Anonymous & Legal</p>
+      </div>
+      <div class="btn-group">
+        <button onclick="downloadCSV()" class="btn-download">📥 Download CSV</button>
+        <button onclick="downloadJSON()" class="btn-download">📥 Download JSON</button>
+      </div>
     </div>
 
     <div class="card">
       <h2>Top States <span class="badge">State Coverage</span></h2>
       <table>
         <thead><tr><th>State</th><th style="text-align:right">Active Farmers</th></tr></thead>
-        <tbody>${formatTable(sortEntries(statesMap))}</tbody>
+        <tbody>${formatTable(sortedStates)}</tbody>
       </table>
     </div>
 
@@ -207,7 +264,7 @@ export default {
       <h2>Top Mandi Districts <span class="badge">Local Sponsor Hotspots</span></h2>
       <table>
         <thead><tr><th>District / Cluster</th><th style="text-align:right">Active Farmers</th></tr></thead>
-        <tbody>${formatTable(sortEntries(districtsMap))}</tbody>
+        <tbody>${formatTable(sortedDistricts)}</tbody>
       </table>
     </div>
 
@@ -215,7 +272,7 @@ export default {
       <h2>Top Crops in Demand <span class="badge">Buyer Intent</span></h2>
       <table>
         <thead><tr><th>Commodity</th><th style="text-align:right">Searches & Views</th></tr></thead>
-        <tbody>${formatTable(sortEntries(cropsMap))}</tbody>
+        <tbody>${formatTable(sortedCrops)}</tbody>
       </table>
     </div>
 
@@ -223,6 +280,68 @@ export default {
       Private Sponsor Telemetry • Zero PII / Zero User IDs • Auto-refreshes daily
     </div>
   </div>
+
+  <script>
+    const analyticsData = {
+      date: "${escapeHtml(today)}",
+      totalSessions: ${Number(totalFarmers)},
+      states: ${JSON.stringify(sortedStates)},
+      districts: ${JSON.stringify(sortedDistricts)},
+      crops: ${JSON.stringify(sortedCrops)}
+    };
+
+    function downloadCSV() {
+      let csv = '=== BharatMandi Farmer Analytics ===\\n';
+      csv += 'Date,' + analyticsData.date + '\\n';
+      csv += 'Total Sessions,' + analyticsData.totalSessions + '\\n\\n';
+      
+      csv += '--- TOP STATES ---\\nState,Active Farmers\\n';
+      analyticsData.states.forEach(([name, count]) => {
+        csv += '"' + String(name).replace(/"/g, '""') + '",' + count + '\\n';
+      });
+      csv += '\\n';
+
+      csv += '--- TOP DISTRICTS ---\\nDistrict,Active Farmers\\n';
+      analyticsData.districts.forEach(([name, count]) => {
+        csv += '"' + String(name).replace(/"/g, '""') + '",' + count + '\\n';
+      });
+      csv += '\\n';
+
+      csv += '--- TOP CROPS IN DEMAND ---\\nCrop,Searches & Views\\n';
+      analyticsData.crops.forEach(([name, count]) => {
+        csv += '"' + String(name).replace(/"/g, '""') + '",' + count + '\\n';
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'BharatMandi_Analytics_' + analyticsData.date + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadJSON() {
+      const exportObj = {
+        date: analyticsData.date,
+        totalSessions: analyticsData.totalSessions,
+        states: Object.fromEntries(analyticsData.states),
+        districts: Object.fromEntries(analyticsData.districts),
+        crops: Object.fromEntries(analyticsData.crops)
+      };
+      const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'BharatMandi_Analytics_' + analyticsData.date + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
 </body>
 </html>`;
 
