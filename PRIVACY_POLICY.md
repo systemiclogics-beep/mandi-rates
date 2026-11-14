@@ -1,7 +1,7 @@
 # Privacy Policy for BharatMandi (भारत मंडी)
 
 **Effective Date:** September 17, 2026  
-**Last Updated:** September 17, 2026  
+**Last Updated:** November 14, 2026  
 **Developer:** SystemicLogics  
 **Application:** BharatMandi (Package: `com.bharatmandi.kisan`)
 
@@ -37,6 +37,10 @@ BharatMandi is designed with a **privacy-first, offline-first** architecture. We
 ### D. Network Data & Live Mandi Rates
 * **Purpose:** The app connects to our public GitHub CDN repository (`systemiclogics-beep/mandi-rates`) over secure HTTPS to download verified daily APMC mandi rates sourced from official public agricultural portals (Agmarknet and data.gov.in).
 * **No Telemetry Tracking:** No personal usage telemetry or device identifiers are collected during rate synchronization.
+
+### E. Anonymous Market Analytics
+* **Purpose:** To evaluate regional market coverage, optimize rate updates, and ensure relevant local agricultural notices are displayed, the app may transmit high-level, anonymous aggregate statistics (specifically: state name, district name, viewed crop category, and chosen app language).
+* **Zero Personal Identifiers:** This telemetry contains **no device identifiers (no Android ID, Advertising ID, IMEI, or MAC address), no phone numbers, no names, and no precise GPS coordinates**. It represents purely non-personal statistical counts that cannot be linked to any individual user or device.
 
 ---
 
