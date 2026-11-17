@@ -112,11 +112,16 @@ export default {
         });
       }
 
-      const today = new Date().toISOString().slice(0, 10);
+      const requestedDate = url.searchParams.get('date');
+      const today = (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate))
+        ? requestedDate
+        : new Date().toISOString().slice(0, 10);
+
       let totalFarmers = 0;
       const statesMap = {};
       const districtsMap = {};
       const cropsMap = {};
+      const availableDates = new Set();
 
       if (env.STATS_KV) {
         try {
@@ -125,6 +130,9 @@ export default {
             const parts = item.name.split(':');
             const prefix = parts[0];
             const date = parts[1];
+            if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+              availableDates.add(date);
+            }
             if (date !== today) continue;
 
             const val = parseInt((await env.STATS_KV.get(item.name)) || '0', 10);
@@ -212,6 +220,19 @@ export default {
         `).join('');
       };
 
+      const sortedDates = Array.from(availableDates).sort().reverse();
+      const datePillsHtml = sortedDates.length > 0 ? `
+        <div style="margin-bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <span style="font-size: 12px; font-weight: 600; color: #64748B;">Select Date:</span>
+          ${sortedDates.map(d => `
+            <a href="/stats?key=${encodeURIComponent(expectedKey)}&date=${encodeURIComponent(d)}" 
+               style="padding: 5px 12px; border-radius: 6px; font-size: 12px; text-decoration: none; font-weight: 600; ${d === today ? 'background: #1B5E20; color: white;' : 'background: white; color: #1E293B; border: 1px solid #CBD5E1;'}">
+              ${d} ${d === new Date().toISOString().slice(0, 10) ? '(Today)' : ''}
+            </a>
+          `).join('')}
+        </div>
+      ` : '';
+
       const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -244,13 +265,15 @@ export default {
     <div class="header">
       <div class="header-text">
         <h1>🌾 BharatMandi — Live Farmer Analytics</h1>
-        <p>Today's Real-Time Active Audience Breakdown (${escapeHtml(today)}) • Total Sessions: ${Number(totalFarmers).toLocaleString()} • 100% Anonymous & Legal</p>
+        <p>Active Audience Breakdown (${escapeHtml(today)}) • Total Sessions: ${Number(totalFarmers).toLocaleString()} • 100% Anonymous & Legal</p>
       </div>
       <div class="btn-group">
         <button onclick="downloadCSV()" class="btn-download">📥 Download CSV</button>
         <button onclick="downloadJSON()" class="btn-download">📥 Download JSON</button>
       </div>
     </div>
+
+    ${datePillsHtml}
 
     <div class="card">
       <h2>Top States <span class="badge">State Coverage</span></h2>
