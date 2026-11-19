@@ -176,21 +176,27 @@ export default {
         });
       }
 
+      const safeCsvCell = (val) => {
+        let s = String(val ?? '');
+        if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+        return '"' + s.replace(/"/g, '""') + '"';
+      };
+
       if (format === 'csv') {
         let csv = '=== BharatMandi Farmer Analytics ===\n';
         csv += `Date,${today}\n`;
         csv += `Total Sessions,${totalFarmers}\n\n`;
         csv += '--- TOP STATES ---\nState,Active Farmers\n';
         sortedStates.forEach(([name, count]) => {
-          csv += `"${String(name).replace(/"/g, '""')}",${count}\n`;
+          csv += `${safeCsvCell(name)},${Number(count)}\n`;
         });
         csv += '\n--- TOP DISTRICTS ---\nDistrict,Active Farmers\n';
         sortedDistricts.forEach(([name, count]) => {
-          csv += `"${String(name).replace(/"/g, '""')}",${count}\n`;
+          csv += `${safeCsvCell(name)},${Number(count)}\n`;
         });
         csv += '\n--- TOP CROPS IN DEMAND ---\nCrop,Searches & Views\n';
         sortedCrops.forEach(([name, count]) => {
-          csv += `"${String(name).replace(/"/g, '""')}",${count}\n`;
+          csv += `${safeCsvCell(name)},${Number(count)}\n`;
         });
         return new Response(csv, {
           status: 200,
@@ -308,10 +314,16 @@ export default {
     const analyticsData = {
       date: "${escapeHtml(today)}",
       totalSessions: ${Number(totalFarmers)},
-      states: ${JSON.stringify(sortedStates)},
-      districts: ${JSON.stringify(sortedDistricts)},
-      crops: ${JSON.stringify(sortedCrops)}
+      states: ${JSON.stringify(sortedStates).replace(/</g, '\\u003c')},
+      districts: ${JSON.stringify(sortedDistricts).replace(/</g, '\\u003c')},
+      crops: ${JSON.stringify(sortedCrops).replace(/</g, '\\u003c')}
     };
+
+    function safeCsvCell(val) {
+      let s = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
 
     function downloadCSV() {
       let csv = '=== BharatMandi Farmer Analytics ===\\n';
@@ -320,19 +332,19 @@ export default {
       
       csv += '--- TOP STATES ---\\nState,Active Farmers\\n';
       analyticsData.states.forEach(([name, count]) => {
-        csv += '"' + String(name).replace(/"/g, '""') + '",' + count + '\\n';
+        csv += safeCsvCell(name) + ',' + Number(count) + '\\n';
       });
       csv += '\\n';
 
       csv += '--- TOP DISTRICTS ---\\nDistrict,Active Farmers\\n';
       analyticsData.districts.forEach(([name, count]) => {
-        csv += '"' + String(name).replace(/"/g, '""') + '",' + count + '\\n';
+        csv += safeCsvCell(name) + ',' + Number(count) + '\\n';
       });
       csv += '\\n';
 
       csv += '--- TOP CROPS IN DEMAND ---\\nCrop,Searches & Views\\n';
       analyticsData.crops.forEach(([name, count]) => {
-        csv += '"' + String(name).replace(/"/g, '""') + '",' + count + '\\n';
+        csv += safeCsvCell(name) + ',' + Number(count) + '\\n';
       });
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
