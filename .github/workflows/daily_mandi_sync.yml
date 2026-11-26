@@ -130,10 +130,15 @@ jobs:
             echo "BACKUP_PAT secret is not configured. Skipping secondary push."
             exit 0
           fi
-          git remote add backup https://x-access-token:${BACKUP_PAT}@github.com/Catalyst097/mandi-rates.git || true
+          cd data-repo
+          git remote add backup "https://x-access-token:${BACKUP_PAT}@github.com/Catalyst097/mandi-rates.git" || git remote set-url backup "https://x-access-token:${BACKUP_PAT}@github.com/Catalyst097/mandi-rates.git"
           for i in 1 2 3; do
             echo "Pushing to Catalyst097 data branch (attempt $i)..."
-            git push backup data:data --force && break || (echo "Backup push failed, waiting 5s..." && sleep 5)
+            if git push backup data:data --force; then
+              break
+            fi
+            echo "Backup push failed (attempt $i/3), waiting 5s..."
+            sleep 5
           done
 
       - name: Purge jsDelivr Edge Cache
